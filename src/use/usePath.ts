@@ -38,5 +38,12 @@ export function usePath() {
                 return false;
             }
         }),
+        canExtractHeroes: computed(() => {
+            if (currentSoftware.value === "gem") {
+                return currentUrl.value.match(/\/run\/{0,1}$/);
+            } else {
+                return false;
+            }
+        })
     };
 }
