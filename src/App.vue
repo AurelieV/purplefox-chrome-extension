@@ -12,8 +12,9 @@
                 <button class="button" @click="extractResults">Extract results</button>
             </div>
             <p v-else>No action possible on this page</p>
+            <p v-if="message" class="mt-2">{{ message }}</p>
             <button
-                class="block ml-auto mt-3 text-xs underline text-purple-500 hover:text-purple-700"
+                class="block mt-3 ml-auto text-xs text-purple-500 underline hover:text-purple-700"
                 @click="tab = 'settings'"
             >
                 Settings
@@ -21,10 +22,10 @@
         </template>
         <template v-if="tab === 'settings'">
             Currently {{ tournamentsCount }} tournaments are in memory.
-            <button v-if="tournamentsCount !== 0" class="button mt-2" @click="clearMemory">Clear</button>
+            <button v-if="tournamentsCount !== 0" class="mt-2 button" @click="clearMemory">Clear</button>
             <div>
                 <button
-                    class="block ml-auto mt-3 text-xs underline text-purple-500 hover:text-purple-700"
+                    class="block mt-3 ml-auto text-xs text-purple-500 underline hover:text-purple-700"
                     @click="tab = 'main'"
                 >
                     Back
@@ -52,6 +53,7 @@ export default defineComponent({
             canExtractResults,
             canExtractHeroes,
             tab: ref("main"),
+            message: ref(""),
         };
     },
     methods: {
@@ -65,7 +67,13 @@ export default defineComponent({
                 },
                 (results: any) => {
                     const { result } = results[0];
-                    navigator.clipboard.writeText(JSON.stringify(result));
+                    navigator.clipboard.writeText(JSON.stringify(result.value));
+                    this.message = result.message;
+                    if (result.errorCount === 0) {
+                        setTimeout(() => {
+                            this.message = "";
+                        }, 2000);
+                    }
                 }
             );
         },
@@ -88,21 +96,74 @@ export default defineComponent({
 
 function extractResult() {
     const PLAYER_REGEXP = /^(.+) \((.+)\)$/;
-    const result: any = [];
+    const TRANSLATE = {
+        "Player 1 Win": "1WIN",
+        "Player 2 Win": "2WIN",
+        Draw: "DRAW",
+    };
+    const result: any = {};
+
+    // ACCEPTED RESULTS
     document.querySelectorAll(".match-row").forEach((row) => {
         const cells = row.querySelectorAll(".match-element");
         const [, playerName1 = null, playerGameId1 = null] = (cells[1]?.innerHTML || "").match(PLAYER_REGEXP) || [];
         const [, playerName2 = null, playerGameId2 = null] = (cells[2]?.innerHTML || "").match(PLAYER_REGEXP) || [];
-        result.push({
-            tableNumber: parseInt(cells[0]?.innerHTML),
+
+        const tableNumber = parseInt(cells[0]?.innerHTML);
+        result[tableNumber] = {
+            tableNumber,
             playerName1,
             playerGameId1,
             playerName2,
             playerGameId2,
             result: cells[3]?.querySelector("select")?.value || null,
-        });
+        };
     });
-    return result;
+
+    // REPORTED RESULT (NOT ACCEPTED)
+    const LINE_REGEXP = "";
+    let errorCount = 0;
+    document.querySelectorAll("#refresh ul li").forEach((line) => {
+        const text = line.querySelector("span")?.innerText;
+        const [rawTable, rawPlayer1, rawPlayer2] = text?.split("\n") || [];
+        const [, rawTableNumber] = rawTable?.match(/Table (\d+)/) || [];
+        const tableNumber = parseInt(rawTableNumber);
+        if (isNaN(tableNumber)) return;
+        const [, playerName1, playerGameId1] = rawPlayer1?.match(/^Player 1 (.*) \((.*)\)/) || [];
+        const [, playerName2, playerGameId2] = rawPlayer2?.match(/^Player 2 (.*) \((.*)\)/) || [];
+
+        const reportedBy1 = rawPlayer1?.match(/reported (.*)$/)?.[1];
+        const reportedBy2 = rawPlayer2?.match(/reported (.*)$/)?.[1];
+
+        if (reportedBy1 !== reportedBy2 && reportedBy1 !== "None" && reportedBy2 !== "None") {
+            errorCount = errorCount + 1;
+            result[tableNumber] = {
+                tableNumber,
+                playerName1,
+                playerName2,
+                playerGameId1,
+                playerGameId2,
+                result: null,
+            };
+            return;
+        }
+        const finalResult = reportedBy1 === "None" ? reportedBy2 : reportedBy1;
+        result[tableNumber] = {
+            tableNumber,
+            playerName1,
+            playerName2,
+            playerGameId1,
+            playerGameId2,
+            result: TRANSLATE[finalResult] || finalResult,
+        };
+    });
+
+    let message = "Copied to clipboard";
+    if (errorCount > 0) {
+        message = `${errorCount} errors found. Copied to clipboard`;
+    }
+
+    return { value: Object.values(result), message, errorCount };
 }
 
 function exportHeroes() {
