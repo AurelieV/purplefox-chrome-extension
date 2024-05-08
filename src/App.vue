@@ -101,15 +101,17 @@ function extractResult() {
         "Player 2 Win": "2WIN",
         Draw: "DRAW",
     };
-    const result: any = {};
+    const result = {};
 
     // ACCEPTED RESULTS
     document.querySelectorAll(".match-row").forEach((row) => {
         const cells = row.querySelectorAll(".match-element");
-        const [, playerName1 = null, playerGameId1 = null] = (cells[1]?.innerHTML || "").match(PLAYER_REGEXP) || [];
-        const [, playerName2 = null, playerGameId2 = null] = (cells[2]?.innerHTML || "").match(PLAYER_REGEXP) || [];
+        const [, playerName1 = null, playerGameId1 = null] =
+            (cells[1]?.innerText || "").trim().match(PLAYER_REGEXP) || [];
+        const [, playerName2 = null, playerGameId2 = null] =
+            (cells[2]?.innerText || "").trim().match(PLAYER_REGEXP) || [];
 
-        const tableNumber = parseInt(cells[0]?.innerHTML);
+        const tableNumber = parseInt(cells[0]?.innerText);
         result[tableNumber] = {
             tableNumber,
             playerName1,
@@ -124,7 +126,9 @@ function extractResult() {
     const LINE_REGEXP = "";
     let errorCount = 0;
     document.querySelectorAll("#refresh ul li").forEach((line) => {
-        const text = line.querySelector("span")?.innerText;
+        if (line.getAttribute("id") === "report-drops") return;
+        if (line.getAttribute("id") === "report-undrop") return;
+        const text = line.querySelector("span")?.innerText?.trim();
         const [rawTable, rawPlayer1, rawPlayer2] = text?.split("\n") || [];
         const [, rawTableNumber] = rawTable?.match(/Table (\d+)/) || [];
         const tableNumber = parseInt(rawTableNumber);
@@ -168,7 +172,6 @@ function extractResult() {
 
 function exportHeroes() {
     const list = document.querySelectorAll("ol li");
-    debugger;
     const players = [...list].map((line) => {
         const [playerText, heroText] = [...line.querySelectorAll(":scope > span")].map((span) => span.innerText);
         const [, name, gameId] = playerText.match(/(.*)\((.*)\)/);

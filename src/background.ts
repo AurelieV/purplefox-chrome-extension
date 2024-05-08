@@ -1,6 +1,6 @@
 let TOURNAMENT_NAMES = {};
 
-chrome.storage.local.get('TOURNAMENT_NAMES', function (result) {
+chrome.storage.local.get("TOURNAMENT_NAMES", function (result) {
     TOURNAMENT_NAMES = result || {};
 });
 
@@ -20,32 +20,10 @@ chrome.webNavigation.onCompleted.addListener(
                     const { result } = results[0];
                     if (result) {
                         TOURNAMENT_NAMES[id] = result;
-                        chrome.storage.local.set({ TOURNAMENT_NAMES })
-                        chrome.scripting.executeScript(
-                            {
-                                target: { tabId },
-                                function: setTitle,
-                            },
-                            (results) => {
-                                chrome.scripting.executeScript({
-                                    target: { tabId },
-                                    function: setTitle,
-                                    args: [result],
-                                });
-                            }
-                        );
+                        chrome.storage.local.set({ TOURNAMENT_NAMES });
                     }
                 }
             );
-            
-        } else if (isResult) {
-            if (TOURNAMENT_NAMES[id]) {
-                chrome.scripting.executeScript({
-                    target: { tabId },
-                    function: setTitle,
-                    args: [TOURNAMENT_NAMES[id]],
-                });
-            }
         }
     },
     { url: [{ hostContains: "gem.fabtcg.com" }] }
@@ -53,8 +31,4 @@ chrome.webNavigation.onCompleted.addListener(
 
 function getTournamentName() {
     return document.querySelector("h1").innerText;
-}
-
-function setTitle(title) {
-    document.title = title;
 }
