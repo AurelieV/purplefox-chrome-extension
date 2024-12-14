@@ -171,17 +171,20 @@ function extractResult() {
 }
 
 function exportHeroes() {
-    const list = document.querySelectorAll("ol li");
-    const players = [...list].map((line) => {
-        const [playerText, heroText] = [...line.querySelectorAll(":scope > span")].map((span) => span.innerText);
-        const [, name, gameId] = playerText.match(/(.*)\((.*)\)/);
-        return {
-            name: name.trim(),
-            gameId,
-            hero: heroText.trim().replaceAll("﻿", ""),
-        };
+    const PLAYER_REGEXP = /^\s+(.+?) \((\d+)\)/
+    const HERO_REGEXP = /^\s+(.+)\n/
+    const result = [];
+    document.querySelectorAll("ol li div.row").forEach((player) => {
+        const cells = player.querySelectorAll("div");
+        const [,playerName = null, playerGameId = null] = cells[0].children[0].innerHTML.match(PLAYER_REGEXP) || []
+        const [,hero = null] = cells[1].innerHTML.match(HERO_REGEXP) || []
+        result.push({
+            name: playerName,
+            gameId: playerGameId,
+            hero: hero
+        });
     });
-    return players;
+    return result;
 }
 </script>
 
