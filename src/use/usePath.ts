@@ -23,6 +23,8 @@ window.addEventListener("unload", () => {
 const currentSoftware = computed(() => {
     if (currentUrl.value.startsWith("https://gem.fabtcg.com/gem/")) {
         return "gem";
+    } else if (currentUrl.value.startsWith("https://admin.carde.io/")) {
+        return "carde"
     } else {
         return null;
     }
@@ -34,6 +36,8 @@ export function usePath() {
         canExtractResults: computed(() => {
             if (currentSoftware.value === "gem") {
                 return currentUrl.value.includes("/report");
+            } else if (currentSoftware.value === "carde") {
+                return currentUrl.value.includes("/pairings");
             } else {
                 return false;
             }
@@ -44,6 +48,12 @@ export function usePath() {
             } else {
                 return false;
             }
+        }),
+        canExtractStandings: computed(() => {
+            if (currentSoftware.value === "carde") {
+                return currentUrl.value.includes("/standings");
+            }
+            return false;
         }),
     };
 }
