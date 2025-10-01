@@ -6,6 +6,9 @@
         <span class="font-bold text-purple-500">{{ currentSoftware }}</span>
       </p>
       <p class="text-center" v-else>No known software detected</p>
+       <div v-if="currentSoftware === 'carde'" class="flex justify-center mt-2">
+        <button class="button" @click="extractCardePlayers">Extract players</button>
+      </div>
       <div v-if="canExtractHeroes" class="flex justify-center mt-2">
         <button class="button" @click="extractHeroes">Extract heroes</button>
       </div>
@@ -132,6 +135,29 @@ export default defineComponent({
         (results: any) => {
           const { result } = results[0];
           navigator.clipboard.writeText(JSON.stringify(result.value));
+          this.message = result.message;
+          if (result.errorCount === 0) {
+            setTimeout(() => {
+              this.message = "";
+            }, 2000);
+          }
+        }
+      );
+    },
+    async extractCardePlayers() {
+      let [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (!tab) return;
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: tab.id as number },
+          function: extractPlayersCarde,
+        },
+        (results: any) => {
+          const { result } = results[0];
+          navigator.clipboard.writeText(result.value.map((p) => `${p.gameId}\t${p.name}`).join("\n"));
           this.message = result.message;
           if (result.errorCount === 0) {
             setTimeout(() => {
@@ -321,6 +347,44 @@ async function extractStandingCarde() {
       standing: line.points,
       isDropped: line.user_event_status?.registration_status === "DROPPED",
       rank: line?.rank,
+    };
+  });
+
+  let errorCount = 0;
+  let message = "Copied to clipboard";
+  if (errorCount > 0) {
+    message = `${errorCount} errors found. Copied to clipboard`;
+  }
+  return { value: result, message, errorCount: 0 };
+}
+
+async function extractPlayersCarde() {
+  const [, eventId] = window.location.pathname.match(/\/events\/(\d+)/) || [];
+  const url = `https://api.admin.carde.io/api/v2/organize/events/${eventId}/registrations-slim?avoid_cache=true&page=1&page_size=5000`;
+  let token;
+  const cookies = `; ${document.cookie}`;
+  const parts = cookies.split(`; web_sessionToken=`);
+  if (parts.length === 2) token = parts.pop().split(";").shift();
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Token ${token}`,
+    },
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return {
+      value: [],
+      message: `Error fetching data: ${response.statusText}`,
+      errorCount: 1,
+    };
+  }
+  const { results: players } = await response.json();
+
+  const result = players.filter(line => line.registration_status === 'COMPLETE').map((line) => {
+    return {
+      name: line?.user?.last_first,
+      gameId: line.user?.id,
     };
   });
 
