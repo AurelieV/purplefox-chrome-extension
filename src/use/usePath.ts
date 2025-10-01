@@ -23,7 +23,7 @@ window.addEventListener("unload", () => {
 const currentSoftware = computed(() => {
     if (currentUrl.value.startsWith("https://gem.fabtcg.com/gem/")) {
         return "gem";
-    } else if (currentUrl.value.startsWith("https://admin.carde.io/")) {
+    } else if (currentUrl.value.includes("carde.io")) {
         return "carde"
     } else {
         return null;
