@@ -7,20 +7,21 @@
       </p>
       <p class="text-center" v-else>No known software detected</p>
        <div v-if="currentSoftware === 'carde'" class="flex justify-center mt-2">
-        <button class="button" @click="extractCardePlayers">Extract players</button>
+        <button class="button" @click="extractCardePlayers" :disabled="isLoading">Extract players</button>
       </div>
       <div v-if="canExtractHeroes" class="flex justify-center mt-2">
-        <button class="button" @click="extractHeroes">Extract heroes</button>
+        <button class="button" @click="extractHeroes" :disabled="isLoading">Extract heroes</button>
       </div>
       <div v-else-if="canExtractResults" class="flex justify-center mt-2">
-        <button class="button" @click="extractResults">Extract results</button>
+        <button class="button" @click="extractResults" :disabled="isLoading">Extract results</button>
       </div>
       <div v-else-if="canExtractStandings" class="flex justify-center mt-2">
-        <button class="button" @click="extractStanding">
+        <button class="button" @click="extractStanding" :disabled="isLoading">
           Extract standings
         </button>
       </div>
       <p v-else>No action possible on this page</p>
+      <div v-if="isLoading" class="loader"></div>
       <p v-if="message" class="mt-2">{{ message }}</p>
       <button
         class="block mt-3 ml-auto text-xs text-purple-500 underline hover:text-purple-700"
@@ -75,10 +76,12 @@ export default defineComponent({
       canExtractStandings,
       tab: ref("main"),
       message: ref(""),
+      isLoading: ref(false),
     };
   },
   methods: {
     async extractResults() {
+      this.isLoading = true;
       let [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
@@ -101,10 +104,12 @@ export default defineComponent({
               this.message = "";
             }, 2000);
           }
+          this.isLoading = false;
         }
       );
     },
     async extractHeroes() {
+      this.isLoading = true;
       let [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
@@ -117,11 +122,13 @@ export default defineComponent({
         },
         (results: any) => {
           const { result } = results[0];
+          this.isLoading = false;
           navigator.clipboard.writeText(JSON.stringify(result));
         }
       );
     },
     async extractStanding() {
+      this.isLoading = true;
       let [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
@@ -141,10 +148,12 @@ export default defineComponent({
               this.message = "";
             }, 2000);
           }
+          this.isLoading = false;
         }
       );
     },
     async extractCardePlayers() {
+      this.isLoading = true;
       let [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
@@ -164,6 +173,7 @@ export default defineComponent({
               this.message = "";
             }, 2000);
           }
+          this.isLoading = false;
         }
       );
     },
@@ -418,5 +428,72 @@ function exportHeroes() {
 <style scoped>
 .button {
   @apply block bg-purple-500 text-white font-bold py-2 px-4 rounded hover:bg-purple-700 active:bg-transparent active:border-purple-500 active:text-purple-500 border border-transparent;
+}
+.loader {
+    animation: rotate 2s infinite;
+    height: 50px;
+    width: 50px;
+}
+
+.loader:before,
+.loader:after {
+    border-radius: 50%;
+    content: "";
+    display: block;
+    height: 20px;
+    width: 20px;
+}
+.loader:before {
+    animation: ball1 2s infinite;
+    @apply bg-purple-500;
+    box-shadow: 30px 0 0 #FFA317;
+    margin-bottom: 10px;
+}
+.loader:after {
+    animation: ball2 2s infinite;
+   background-color: "#FFA317";
+    box-shadow: 30px 0 0 #814BB8;
+}
+
+@keyframes rotate {
+    0% {
+        transform: rotate(0deg) scale(0.8);
+    }
+    50% {
+        transform: rotate(360deg) scale(1.2);
+    }
+    100% {
+        transform: rotate(720deg) scale(0.8);
+    }
+}
+
+@keyframes ball1 {
+    0% {
+        box-shadow: 30px 0 0 #FFA317;
+    }
+    50% {
+        box-shadow: 0 0 0 #FFA317;
+        margin-bottom: 0;
+        transform: translate(15px, 15px);
+    }
+    100% {
+        box-shadow: 30px 0 0 #FFA317;
+        margin-bottom: 10px;
+    }
+}
+
+@keyframes ball2 {
+    0% {
+        box-shadow: 30px 0 0 #814BB8;
+    }
+    50% {
+        box-shadow: 0 0 0 #814BB8;
+        margin-top: -20px;
+        transform: translate(15px, 15px);
+    }
+    100% {
+        box-shadow: 30px 0 0 #814BB8;
+        margin-top: 0;
+    }
 }
 </style>

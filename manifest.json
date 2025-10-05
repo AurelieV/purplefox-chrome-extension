@@ -5,7 +5,7 @@
         "48": "logo_48.png",
         "128": "logo_128.png"
     },
-    "version": "4.2",
+    "version": "4.3",
     "manifest_version": 3,
     "background": {
         "service_worker": "src/background.ts"
