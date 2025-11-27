@@ -165,7 +165,9 @@ export default defineComponent({
           function: extractPlayersCarde,
         },
         (results: any) => {
+          console.log("pouet 23")
           const { result } = results[0];
+          console.log(results, result, result.value);
           navigator.clipboard.writeText(result.value.map((p) => `${p.gameId}\t${p.name}`).join("\n"));
           this.message = result.message;
           if (result.errorCount === 0) {
@@ -266,16 +268,9 @@ async function extractResultCarde() {
   const [, eventId, roundId] =
     window.location.pathname.match(/\/events\/(\d+)\/pairings\/round\/(\d+)/) ||
     [];
-  let token;
-  const cookies = `; ${document.cookie}`;
-  const parts = cookies.split(`; web_sessionToken=`);
-  if (parts.length === 2) token = parts.pop().split(";").shift();
-  const url = `https://api.admin.carde.io/api/v2/organize/tournament-rounds/${roundId}/matches-list/?round_id=${roundId}&avoid_cache=true&page=1&page_size=3000`;
+  const url = `https://api.ravensburgerplay.com/api/v2/tournament-rounds/${roundId}/matches/?round_id=${roundId}&avoid_cache=true&page=1&page_size=3000`;
   const response = await fetch(url, {
     method: "GET",
-    headers: {
-      Authorization: `Token ${token}`,
-    },
     credentials: "include",
   });
   if (!response.ok) {
@@ -285,7 +280,7 @@ async function extractResultCarde() {
       errorCount: 1,
     };
   }
-  const { results: matches } = await response.json();
+  const { matches } = await response.json();
 
   const result = matches
     .map((match: any) => {
@@ -304,11 +299,11 @@ async function extractResultCarde() {
       return {
         tableNumber: match.table_number,
         playerName1: player1?.player
-          ? `${player1.player.last_name}, ${player1.player.first_name}`
+          ? `${player1.player.best_identifier}`
           : null,
         playerGameId1: player1?.player?.id || null,
         playerName2: player2?.player
-          ? `${player2.player.last_name}, ${player2.player.first_name}`
+          ? `${player2.player.best_identifier}`
           : null,
         playerGameId2: player2?.player?.id || null,
         result: matchResult,
@@ -329,16 +324,9 @@ async function extractStandingCarde() {
     window.location.pathname.match(
       /\/events\/(\d+)\/standings\/round\/(\d+)/
     ) || [];
-  const url = `https://api.admin.carde.io/api/v2/organize/tournament-rounds/${roundId}/standings?avoid_cache=true&page=1&page_size=3000`;
-  let token;
-  const cookies = `; ${document.cookie}`;
-  const parts = cookies.split(`; web_sessionToken=`);
-  if (parts.length === 2) token = parts.pop().split(";").shift();
+  const url = `https://api.ravensburgerplay.com/api/v2/tournament-rounds/${roundId}/standings?avoid_cache=true&page=1&page_size=3000`;
   const response = await fetch(url, {
     method: "GET",
-    headers: {
-      Authorization: `Token ${token}`,
-    },
     credentials: "include",
   });
   if (!response.ok) {
@@ -348,7 +336,7 @@ async function extractStandingCarde() {
       errorCount: 1,
     };
   }
-  const { results: players } = await response.json();
+  const { standings: players } = await response.json();
 
   const result = players.map((line) => {
     return {
@@ -370,16 +358,9 @@ async function extractStandingCarde() {
 
 async function extractPlayersCarde() {
   const [, eventId] = window.location.pathname.match(/\/events\/(\d+)/) || [];
-  const url = `https://api.admin.carde.io/api/v2/organize/events/${eventId}/registrations-slim?avoid_cache=true&page=1&page_size=5000`;
-  let token;
-  const cookies = `; ${document.cookie}`;
-  const parts = cookies.split(`; web_sessionToken=`);
-  if (parts.length === 2) token = parts.pop().split(";").shift();
+  const url = `https://api.ravensburgerplay.com/api/v2/events/${eventId}/registrations?avoid_cache=true&page=1&page_size=5000&include_deaths=true`;
   const response = await fetch(url, {
     method: "GET",
-    headers: {
-      Authorization: `Token ${token}`,
-    },
     credentials: "include",
   });
   if (!response.ok) {
@@ -391,9 +372,9 @@ async function extractPlayersCarde() {
   }
   const { results: players } = await response.json();
 
-  const result = players.filter(line => line.registration_status === 'COMPLETE').map((line) => {
+  const result = players.filter(line => line.registration_status === 'COMPLETE' || line.registration_status === 'ELIMINATED').map((line) => {
     return {
-      name: line?.user?.last_first,
+      name: line?.user?.best_identifier,
       gameId: line.user?.id,
     };
   });
