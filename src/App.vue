@@ -6,14 +6,24 @@
         <span class="font-bold text-purple-500">{{ currentSoftware }}</span>
       </p>
       <p class="text-center" v-else>No known software detected</p>
-       <div v-if="currentSoftware === 'carde'" class="flex justify-center mt-2">
-        <button class="button" @click="extractCardePlayers" :disabled="isLoading">Extract players</button>
+      <div v-if="currentSoftware === 'carde'" class="flex justify-center mt-2">
+        <button
+          class="button"
+          @click="extractCardePlayers"
+          :disabled="isLoading"
+        >
+          Extract players
+        </button>
       </div>
       <div v-if="canExtractHeroes" class="flex justify-center mt-2">
-        <button class="button" @click="extractHeroes" :disabled="isLoading">Extract heroes</button>
+        <button class="button" @click="extractHeroes" :disabled="isLoading">
+          Extract heroes
+        </button>
       </div>
       <div v-else-if="canExtractResults" class="flex justify-center mt-2">
-        <button class="button" @click="extractResults" :disabled="isLoading">Extract results</button>
+        <button class="button" @click="extractResults" :disabled="isLoading">
+          Extract results
+        </button>
       </div>
       <div v-else-if="canExtractStandings" class="flex justify-center mt-2">
         <button class="button" @click="extractStanding" :disabled="isLoading">
@@ -67,6 +77,13 @@ export default defineComponent({
       canExtractHeroes,
       canExtractStandings,
     } = usePath();
+
+    const token = ref("");
+    chrome.storage.local.get("token", function ({ token: value }) {
+      token.value = value;
+      console.log("Loaded token from storage", value);
+    });
+
     return {
       currentSoftware,
       tournamentsCount,
@@ -77,6 +94,7 @@ export default defineComponent({
       tab: ref("main"),
       message: ref(""),
       isLoading: ref(false),
+      token,
     };
   },
   methods: {
@@ -94,6 +112,7 @@ export default defineComponent({
             this.currentSoftware === "gem"
               ? extractResultGem
               : extractResultCarde,
+          args: [this.token],
         },
         (results: any) => {
           const { result } = results[0];
@@ -138,6 +157,7 @@ export default defineComponent({
         {
           target: { tabId: tab.id as number },
           function: extractStandingCarde,
+          args: [this.token],
         },
         (results: any) => {
           const { result } = results[0];
@@ -163,6 +183,7 @@ export default defineComponent({
         {
           target: { tabId: tab.id as number },
           function: extractPlayersCarde,
+          args: [this.token],
         },
         (results: any) => {
           const { result } = results[0];
@@ -262,14 +283,10 @@ function extractResultGem() {
   return { value: Object.values(result), message, errorCount };
 }
 
-async function extractResultCarde() {
+async function extractResultCarde(token) {
   const [, eventId, roundId] =
     window.location.pathname.match(/\/events\/(\d+)\/pairings\/round\/(\d+)/) ||
     [];
-  let token;
-  const cookies = `; ${document.cookie}`;
-  const parts = cookies.split(`; web_sessionToken=`);
-  if (parts.length === 2) token = parts.pop().split(";").shift();
   const url = `https://api.admin.carde.io/api/v2/organize/tournament-rounds/${roundId}/matches-list/?round_id=${roundId}&avoid_cache=true&page=1&page_size=3000`;
   const response = await fetch(url, {
     method: "GET",
@@ -324,16 +341,12 @@ async function extractResultCarde() {
   return { value: result, message, errorCount: 0 };
 }
 
-async function extractStandingCarde() {
+async function extractStandingCarde(token) {
   const [, eventId, roundId] =
     window.location.pathname.match(
       /\/events\/(\d+)\/standings\/round\/(\d+)/
     ) || [];
   const url = `https://api.admin.carde.io/api/v2/organize/tournament-rounds/${roundId}/standings?avoid_cache=true&page=1&page_size=3000`;
-  let token;
-  const cookies = `; ${document.cookie}`;
-  const parts = cookies.split(`; web_sessionToken=`);
-  if (parts.length === 2) token = parts.pop().split(";").shift();
   const response = await fetch(url, {
     method: "GET",
     headers: {
@@ -368,13 +381,9 @@ async function extractStandingCarde() {
   return { value: result, message, errorCount: 0 };
 }
 
-async function extractPlayersCarde() {
+async function extractPlayersCarde(token) {
   const [, eventId] = window.location.pathname.match(/\/events\/(\d+)/) || [];
-  const url = `https://api.admin.carde.io/api/v2/organize/events/${eventId}/registrations-slim?avoid_cache=true&page=1&page_size=5000`;
-  let token;
-  const cookies = `; ${document.cookie}`;
-  const parts = cookies.split(`; web_sessionToken=`);
-  if (parts.length === 2) token = parts.pop().split(";").shift();
+  const url = `https://api.admin.carde.io/api/v2/organize/events/${eventId}/registrations-slim?avoid_cache=true&page=1&include_deaths=true&page_size=5000`;
   const response = await fetch(url, {
     method: "GET",
     headers: {
@@ -391,7 +400,7 @@ async function extractPlayersCarde() {
   }
   const { results: players } = await response.json();
 
-  const result = players.filter(line => line.registration_status === 'COMPLETE').map((line) => {
+  const result = players.filter(line => line.registration_status === 'COMPLETE' || line.registration_status === 'ELIMINATED').map((line) => {
     return {
       name: line?.user?.last_first,
       gameId: line.user?.id,
@@ -430,70 +439,70 @@ function exportHeroes() {
   @apply block bg-purple-500 text-white font-bold py-2 px-4 rounded hover:bg-purple-700 active:bg-transparent active:border-purple-500 active:text-purple-500 border border-transparent;
 }
 .loader {
-    animation: rotate 2s infinite;
-    height: 50px;
-    width: 50px;
+  animation: rotate 2s infinite;
+  height: 50px;
+  width: 50px;
 }
 
 .loader:before,
 .loader:after {
-    border-radius: 50%;
-    content: "";
-    display: block;
-    height: 20px;
-    width: 20px;
+  border-radius: 50%;
+  content: "";
+  display: block;
+  height: 20px;
+  width: 20px;
 }
 .loader:before {
-    animation: ball1 2s infinite;
-    @apply bg-purple-500;
-    box-shadow: 30px 0 0 #FFA317;
-    margin-bottom: 10px;
+  animation: ball1 2s infinite;
+  @apply bg-purple-500;
+  box-shadow: 30px 0 0 #ffa317;
+  margin-bottom: 10px;
 }
 .loader:after {
-    animation: ball2 2s infinite;
-   background-color: "#FFA317";
-    box-shadow: 30px 0 0 #814BB8;
+  animation: ball2 2s infinite;
+  background-color: "#FFA317";
+  box-shadow: 30px 0 0 #814bb8;
 }
 
 @keyframes rotate {
-    0% {
-        transform: rotate(0deg) scale(0.8);
-    }
-    50% {
-        transform: rotate(360deg) scale(1.2);
-    }
-    100% {
-        transform: rotate(720deg) scale(0.8);
-    }
+  0% {
+    transform: rotate(0deg) scale(0.8);
+  }
+  50% {
+    transform: rotate(360deg) scale(1.2);
+  }
+  100% {
+    transform: rotate(720deg) scale(0.8);
+  }
 }
 
 @keyframes ball1 {
-    0% {
-        box-shadow: 30px 0 0 #FFA317;
-    }
-    50% {
-        box-shadow: 0 0 0 #FFA317;
-        margin-bottom: 0;
-        transform: translate(15px, 15px);
-    }
-    100% {
-        box-shadow: 30px 0 0 #FFA317;
-        margin-bottom: 10px;
-    }
+  0% {
+    box-shadow: 30px 0 0 #ffa317;
+  }
+  50% {
+    box-shadow: 0 0 0 #ffa317;
+    margin-bottom: 0;
+    transform: translate(15px, 15px);
+  }
+  100% {
+    box-shadow: 30px 0 0 #ffa317;
+    margin-bottom: 10px;
+  }
 }
 
 @keyframes ball2 {
-    0% {
-        box-shadow: 30px 0 0 #814BB8;
-    }
-    50% {
-        box-shadow: 0 0 0 #814BB8;
-        margin-top: -20px;
-        transform: translate(15px, 15px);
-    }
-    100% {
-        box-shadow: 30px 0 0 #814BB8;
-        margin-top: 0;
-    }
+  0% {
+    box-shadow: 30px 0 0 #814bb8;
+  }
+  50% {
+    box-shadow: 0 0 0 #814bb8;
+    margin-top: -20px;
+    transform: translate(15px, 15px);
+  }
+  100% {
+    box-shadow: 30px 0 0 #814bb8;
+    margin-top: 0;
+  }
 }
 </style>
