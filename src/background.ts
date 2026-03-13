@@ -1,26 +1,25 @@
-let TOURNAMENT_NAMES = {};
-
-chrome.storage.local.get("TOURNAMENT_NAMES", function (result) {
-  TOURNAMENT_NAMES = result || {};
-});
-
 chrome.webNavigation.onCompleted.addListener(
   ({ url, tabId }) => {
     const isResult = url.includes("/report");
     const isMain = url.includes("/run") && !isResult;
     const [, id] = url.match(/.*\/gem\/(\d+).*/) || [];
 
-    if (isMain) {
+    if (isMain && id) {
       chrome.scripting.executeScript(
         {
           target: { tabId },
-          function: getTournamentName,
+          func: getTournamentName,
         },
-        (results) => {
-          const { result } = results[0];
-          if (result) {
-            TOURNAMENT_NAMES[id] = result;
-            chrome.storage.local.set({ TOURNAMENT_NAMES });
+        (results: chrome.scripting.InjectionResult[]) => {
+          if ((chrome.runtime as any).lastError || !results || !results[0]) return;
+          const tournamentName = results[0].result as string;
+          
+          if (tournamentName) {
+            chrome.storage.local.get("TOURNAMENT_NAMES", (storage) => {
+              const TOURNAMENT_NAMES = storage.TOURNAMENT_NAMES || {};
+              TOURNAMENT_NAMES[id] = tournamentName;
+              chrome.storage.local.set({ TOURNAMENT_NAMES });
+            });
           }
         }
       );
@@ -53,5 +52,5 @@ chrome.webNavigation.onCompleted.addListener(
 );
 
 function getTournamentName() {
-  return document.querySelector("h1").innerText;
+  return document.querySelector("h1")?.innerText || "";
 }
