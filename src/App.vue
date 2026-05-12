@@ -159,7 +159,6 @@ export default defineComponent({
     const token = ref("");
     chrome.storage.local.get("token", function ({ token: value }) {
       token.value = value;
-      console.log("Loaded token from storage", value);
     });
 
     const starredPlayers = ref("");
@@ -882,7 +881,7 @@ function exportHeroes() {
   return { value: result, message: "Heroes Copied", errorCount: 0 };
 }
 
-async function extractResultKgcn() {
+async function extractResultKgcn(token: string, starredPlayers: string) {
   const formatName = (fullName: string) => {
     if (!fullName) return "";
     const parts = fullName.trim().split(/\s+/);
@@ -893,14 +892,46 @@ async function extractResultKgcn() {
     return fullName;
   };
 
-  const match = window.location.hash.match(/\/tournament-duel\/([^\/]+)/);
+  const watchedPlayerLines = (starredPlayers || '').toLowerCase().split('\n').map(p => p.trim()).filter(Boolean);
+  const isPlayerWatched = (name: string, id: string) => {
+      if (watchedPlayerLines.length === 0) return false;
+      const lowerCaseName = name.toLowerCase();
+      return watchedPlayerLines.some(line => lowerCaseName.includes(line) || (id && line === id));
+  };
+
+  const match = window.location.hash.match(/\/(?:tournament|tournament-duel)\/([^\/]+)/);
   if (!match) {
     return { value: [], message: "Tournament ID not found in URL", errorCount: 1 };
   }
   
   const eventId = match[1];
-  const roundMatch = window.location.hash.match(/\/round\/(\d+)/);
-  const roundId = roundMatch ? roundMatch[1] : '0';
+  let roundId = '0';
+  let extractionMethod = 'unknown';
+
+  try {
+    const roundResponse = await fetch(`https://shp.cardgame-network.konami.net/mt/tournament/${eventId}/nowRound`, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (roundResponse.ok) {
+      const roundText = await roundResponse.text();
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(roundText, "text/xml");
+      roundId = xmlDoc.querySelector("Integer")?.textContent || '0';
+      if (roundId !== '0') {
+        extractionMethod = 'API (/nowRound)';
+      }
+    }
+  } catch (e) {
+    console.error("Error fetching nowRound API:", e);
+  }
+
+  if (roundId === '0') {
+    const roundMatch = window.location.hash.match(/\/round\/(\d+)/);
+    roundId = roundMatch ? roundMatch[1] : '0';
+    extractionMethod = 'URL Hash';
+  }
+
   const url = `https://shp.cardgame-network.konami.net/mt/tournament-underway/round/${eventId}/${roundId}?upd=off`;
 
   try {
@@ -944,11 +975,14 @@ async function extractResultKgcn() {
       const id2 = user2Node?.querySelector("cossyId")?.textContent || "";
       const name2 = user2Node?.querySelector("name")?.textContent || "";
 
+      const formattedName1 = formatName(name1);
+      const formattedName2 = formatName(name2);
+
       return {
         playerGameId1: id1 || null,
-        playerName1: formatName(name1),
+        playerName1: isPlayerWatched(name1, id1) ? `⭐ ${formattedName1}` : formattedName1,
         playerGameId2: id2 || null,
-        playerName2: formatName(name2),
+        playerName2: isPlayerWatched(name2, id2) ? `⭐ ${formattedName2}` : formattedName2,
         result: matchResult,
         tableNumber: parseInt(matchNode.querySelector("displayTableName")?.textContent || "0", 10) || 0
       };
@@ -965,7 +999,7 @@ async function extractResultKgcn() {
   }
 }
 
-async function extractStandingKgcn() {
+async function extractStandingKgcn(token: string, starredPlayers: string) {
   const formatName = (fullName: string) => {
     if (!fullName) return "";
     const parts = fullName.trim().split(/\s+/);
@@ -974,6 +1008,13 @@ async function extractStandingKgcn() {
       return `${parts.join(" ")} ${lastName?.charAt(0).toUpperCase()}.`;
     }
     return fullName;
+  };
+
+  const watchedPlayerLines = (starredPlayers || '').toLowerCase().split('\n').map(p => p.trim()).filter(Boolean);
+  const isPlayerWatched = (name: string, id: string) => {
+      if (watchedPlayerLines.length === 0) return false;
+      const lowerCaseName = name.toLowerCase();
+      return watchedPlayerLines.some(line => lowerCaseName.includes(line) || (id && line === id));
   };
 
   const match = window.location.hash.match(/\/(?:tournament|tournament-duel)\/([^\/]+)/);
@@ -1016,7 +1057,7 @@ async function extractStandingKgcn() {
       return {
         gameId: gameId,
         isDropped: playerNode.querySelector("leavingAwayStatus")?.textContent === '9',
-        name: formatName(rawName),
+        name: isPlayerWatched(rawName, gameId) ? `⭐ ${formatName(rawName)}` : formatName(rawName),
         rank: parseInt(playerNode.querySelector("rankNo")?.textContent || "0", 10),
         standing: points
       };
