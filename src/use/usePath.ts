@@ -1,59 +1,37 @@
-import { ref, computed } from "vue";
-
-const currentUrl = ref("");
-
-function updateCurrentUrl() {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs && tabs.length > 0) {
-            currentUrl.value = tabs[0].url;
-        }
-    });
-}
-
-updateCurrentUrl();
-
-chrome.tabs.onActivated.addListener(updateCurrentUrl);
-chrome.tabs.onUpdated.addListener(updateCurrentUrl);
-
-window.addEventListener("unload", () => {
-    chrome.tabs.onActivated.removeListener(updateCurrentUrl);
-    chrome.tabs.onUpdated.removeListener(updateCurrentUrl);
-});
-
-const currentSoftware = computed(() => {
-    if (currentUrl.value.startsWith("https://gem.fabtcg.com/gem/")) {
-        return "gem";
-    } else if (currentUrl.value.includes("carde.io")) {
-        return "carde"
-    } else {
-        return null;
-    }
-});
+import { ref } from "vue";
 
 export function usePath() {
-    return {
-        currentSoftware,
-        canExtractResults: computed(() => {
-            if (currentSoftware.value === "gem") {
-                return currentUrl.value.includes("/report");
-            } else if (currentSoftware.value === "carde") {
-                return currentUrl.value.includes("/pairings");
-            } else {
-                return false;
-            }
-        }),
-        canExtractHeroes: computed(() => {
-            if (currentSoftware.value === "gem") {
-                return currentUrl.value.match(/\/run\/{0,1}$/);
-            } else {
-                return false;
-            }
-        }),
-        canExtractStandings: computed(() => {
-            if (currentSoftware.value === "carde") {
-                return currentUrl.value.includes("/standings");
-            }
-            return false;
-        }),
-    };
+  const currentSoftware = ref<string | null>(null);
+  const canExtractResults = ref(false);
+  const canExtractHeroes = ref(false);
+  const canExtractStandings = ref(false);
+
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    const tab = tabs[0];
+    if (tab && tab.url) {
+      const url = tab.url.toLowerCase();
+
+      if (url.includes("gem.fabtcg.com")) {
+        currentSoftware.value = "gem";
+        canExtractResults.value = true;
+      } else if (url.includes("carde.io")) {
+        currentSoftware.value = "carde";
+        canExtractResults.value = url.includes("/pairings");
+        canExtractStandings.value = url.includes("/standings");
+      } else if (url.includes("https://eor.purple-fox.fr")) {
+        currentSoftware.value = "purplefox";
+      } else if (url.includes("cardgame-network.konami.net")) {
+        currentSoftware.value = "kgcn";
+        canExtractResults.value = true;
+        canExtractStandings.value = true;
+      }
+    }
+  });
+
+  return {
+    currentSoftware,
+    canExtractResults,
+    canExtractHeroes,
+    canExtractStandings,
+  };
 }
