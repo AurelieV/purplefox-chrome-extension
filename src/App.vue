@@ -892,6 +892,15 @@ async function extractResultKgcn(token: string, starredPlayers: string) {
     return fullName;
   };
 
+  const obfuscateId = (id: string): string => {
+    if (!id) return "";
+    try {
+      return (BigInt(id) ^ BigInt(8392745016)).toString();
+    } catch {
+      return id;
+    }
+  };
+
   const watchedPlayerLines = (starredPlayers || '').toLowerCase().split('\n').map(p => p.trim()).filter(Boolean);
   const isPlayerWatched = (name: string, id: string) => {
       if (watchedPlayerLines.length === 0) return false;
@@ -979,9 +988,9 @@ async function extractResultKgcn(token: string, starredPlayers: string) {
       const formattedName2 = formatName(name2);
 
       return {
-        playerGameId1: id1 || null,
+        playerGameId1: obfuscateId(id1) || null,
         playerName1: isPlayerWatched(name1, id1) ? `⭐ ${formattedName1}` : formattedName1,
-        playerGameId2: id2 || null,
+        playerGameId2: obfuscateId(id2) || null,
         playerName2: isPlayerWatched(name2, id2) ? `⭐ ${formattedName2}` : formattedName2,
         result: matchResult,
         tableNumber: parseInt(matchNode.querySelector("displayTableName")?.textContent || "0", 10) || 0
@@ -1008,6 +1017,15 @@ async function extractStandingKgcn(token: string, starredPlayers: string) {
       return `${parts.join(" ")} ${lastName?.charAt(0).toUpperCase()}.`;
     }
     return fullName;
+  };
+
+  const obfuscateId = (id: string): string => {
+    if (!id) return "";
+    try {
+      return (BigInt(id) ^ BigInt(8392745016)).toString();
+    } catch {
+      return id;
+    }
   };
 
   const watchedPlayerLines = (starredPlayers || '').toLowerCase().split('\n').map(p => p.trim()).filter(Boolean);
@@ -1055,7 +1073,7 @@ async function extractStandingKgcn(token: string, starredPlayers: string) {
       const rawName = playerNode.querySelector("cossyName")?.textContent || "";
 
       return {
-        gameId: gameId,
+        gameId: obfuscateId(gameId),
         isDropped: playerNode.querySelector("leavingAwayStatus")?.textContent === '9',
         name: isPlayerWatched(rawName, gameId) ? `⭐ ${formatName(rawName)}` : formatName(rawName),
         rank: parseInt(playerNode.querySelector("rankNo")?.textContent || "0", 10),
