@@ -5,7 +5,7 @@ const currentUrl = ref("");
 function updateCurrentUrl() {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs && tabs.length > 0) {
-            currentUrl.value = tabs[0].url;
+            currentUrl.value = tabs[0].url ?? "";
         }
     });
 }
@@ -52,6 +52,12 @@ export function usePath() {
         canExtractStandings: computed(() => {
             if (currentSoftware.value === "carde") {
                 return currentUrl.value.includes("/standings");
+            }
+            return false;
+        }),
+        canExtractMeta: computed(() => {
+            if (currentSoftware.value === "carde") {
+                return /\/events\/\d+/.test(currentUrl.value);
             }
             return false;
         }),

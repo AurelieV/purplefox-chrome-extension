@@ -15,6 +15,15 @@
           Extract players
         </button>
       </div>
+      <div v-if="canExtractMeta" class="flex justify-center mt-2">
+        <button
+          class="button"
+          @click="extractLorcanaMeta"
+          :disabled="isLoading"
+        >
+          Extract meta
+        </button>
+      </div>
       <div v-if="canExtractHeroes" class="flex justify-center mt-2">
         <button class="button" @click="extractHeroes" :disabled="isLoading">
           Extract heroes
@@ -30,8 +39,43 @@
           Extract standings
         </button>
       </div>
-      <p v-else>No action possible on this page</p>
+      <p
+        v-if="
+          currentSoftware &&
+          currentSoftware !== 'carde' &&
+          !canExtractHeroes &&
+          !canExtractResults &&
+          !canExtractStandings &&
+          !canExtractMeta
+        "
+      >
+        No action possible on this page
+      </p>
       <div v-if="isLoading" class="loader"></div>
+      <div
+        v-if="metaState === 'loading'"
+        class="flex flex-col items-center mt-2"
+      >
+        <div class="loader"></div>
+        <p class="mt-2 text-sm text-center text-gray-600">
+          Fetching all decks from carde… this can take up to a minute. You can
+          close this popup, the result will be kept.
+        </p>
+      </div>
+      <div v-else-if="metaState === 'done' && metaTsv" class="mt-2">
+        <button class="button" @click="copyMeta">
+          Copy meta ({{ metaCount }})
+        </button>
+        <p v-if="metaTimeLabel" class="mt-1 text-xs text-center text-gray-500">
+          Extracted at {{ metaTimeLabel }}
+        </p>
+        <textarea
+          readonly
+          :value="metaTsv"
+          rows="3"
+          class="w-full p-1 mt-1 text-xs border rounded"
+        ></textarea>
+      </div>
       <p v-if="message" class="mt-2">{{ message }}</p>
       <button
         class="block mt-3 ml-auto text-xs text-purple-500 underline hover:text-purple-700"
@@ -76,6 +120,7 @@ export default defineComponent({
       canExtractResults,
       canExtractHeroes,
       canExtractStandings,
+      canExtractMeta,
     } = usePath();
 
     const token = ref("");
@@ -91,9 +136,14 @@ export default defineComponent({
       canExtractResults,
       canExtractHeroes,
       canExtractStandings,
+      canExtractMeta,
       tab: ref("main"),
       message: ref(""),
       isLoading: ref(false),
+      metaState: ref(""),
+      metaTsv: ref(""),
+      metaCount: ref(0),
+      metaAt: ref(0),
       token,
     };
   },
@@ -112,7 +162,7 @@ export default defineComponent({
             this.currentSoftware === "gem"
               ? extractResultGem
               : extractResultCarde,
-          args: [this.token],
+          args: this.currentSoftware === "gem" ? [] : [this.token ?? ""],
         },
         (results: any) => {
           const { result } = results[0];
@@ -157,7 +207,7 @@ export default defineComponent({
         {
           target: { tabId: tab.id as number },
           function: extractStandingCarde,
-          args: [this.token],
+          args: [this.token ?? ""],
         },
         (results: any) => {
           const { result } = results[0];
@@ -183,7 +233,7 @@ export default defineComponent({
         {
           target: { tabId: tab.id as number },
           function: extractPlayersCarde,
-          args: [this.token],
+          args: [this.token ?? ""],
         },
         (results: any) => {
           const { result } = results[0];
@@ -198,6 +248,68 @@ export default defineComponent({
         }
       );
     },
+    async extractLorcanaMeta() {
+      let [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (!tab) return;
+      const [, eventId] = (tab.url || "").match(/\/events\/(\d+)/) || [];
+      // Triggered in the service worker: it survives the popup being closed.
+      this.metaState = "loading";
+      this.metaTsv = "";
+      this.message = "";
+      chrome.runtime.sendMessage({
+        action: "extractMeta",
+        tabId: tab.id,
+        eventId,
+      });
+    },
+    async copyMeta() {
+      try {
+        await navigator.clipboard.writeText(this.metaTsv);
+        this.message = `Copied ${this.metaCount} decks to clipboard`;
+        setTimeout(() => {
+          this.message = "";
+        }, 2000);
+      } catch {
+        this.message = "Copy failed — click inside the popup, then retry";
+      }
+    },
+    loadMetaFromStorage() {
+      chrome.storage.local.get(
+        ["metaStatus", "metaResult"],
+        ({ metaStatus, metaResult }) => {
+          const state = metaStatus?.state || "";
+          // Safeguard: a too-old "loading" state (SW killed) must not block the UI.
+          const isStale =
+            state === "loading" && Date.now() - (metaStatus?.at || 0) > 180000;
+          this.metaState = isStale ? "" : state;
+          if (state === "error") {
+            this.message = metaStatus.message || "Extraction failed";
+          }
+          if (metaResult) {
+            this.metaTsv = metaResult.tsv || "";
+            this.metaCount = metaResult.count || 0;
+            this.metaAt = metaResult.at || 0;
+          }
+        }
+      );
+    },
+  },
+  computed: {
+    metaTimeLabel() {
+      return this.metaAt ? new Date(this.metaAt).toLocaleTimeString() : "";
+    },
+  },
+  mounted() {
+    this.loadMetaFromStorage();
+    // The popup is recreated on each open: this listener dies with it (no leak).
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && (changes.metaStatus || changes.metaResult)) {
+        this.loadMetaFromStorage();
+      }
+    });
   },
 });
 
