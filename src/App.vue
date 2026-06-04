@@ -526,12 +526,82 @@ const extractPurpleFoxPenalties = async (): Promise<ScriptResult<void>> => {
     const data = await penaltiesResponse.json();
     if (!data || data.length === 0) return { value: undefined, errorCount: 1, message: "No penalties found." };
 
-    const headers = ["Player", "ID", "Round", "Infraction", "Category", "Penalty", "Description", "Judge"];
-    const csvRows = data.map((row: Record<string, any>) => {
+    // --- FETCH TABLE STATUS (TIME EXTENSIONS) ---
+    const tableStatusUrl = `https://nsytfortyuheqhyxxpzl.supabase.co/rest/v1/table_status?select=*&tournamentId=eq.${tournamentId}`;
+    const tableStatusResponse = await fetch(tableStatusUrl, {
+      method: "GET",
+      headers: {
+        "apikey": SUPABASE_API_KEY,
+        "Authorization": `Bearer ${rawToken}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    // Step 1: Save the time extension mapped by table number
+    const timeExtensions: Record<number, string> = {};
+    if (tableStatusResponse.ok) {
+      const statusData = await tableStatusResponse.json();
+      statusData.forEach((status: any) => {
+        if (status.tableNumber != null && status.time != null) {
+          timeExtensions[status.tableNumber] = `+${status.time}`;
+        }
+      });
+    }
+
+    // --- FETCH TABLES (TO MAP PLAYER TO TABLE) ---
+    const tablesUrl = `https://nsytfortyuheqhyxxpzl.supabase.co/rest/v1/tables?select=*&tournamentId=eq.${tournamentId}`;
+    const tablesResponse = await fetch(tablesUrl, {
+      method: "GET",
+      headers: {
+        "apikey": SUPABASE_API_KEY,
+        "Authorization": `Bearer ${rawToken}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    const playerToTableMap: Record<string, number> = {};
+    if (tablesResponse.ok) {
+      const tablesData = await tablesResponse.json();
+      tablesData.forEach((match: any) => {
+        if (match.tableNumber != null) {
+          if (match.playerGameId1) playerToTableMap[match.playerGameId1] = match.tableNumber;
+          if (match.playerGameId2) playerToTableMap[match.playerGameId2] = match.tableNumber;
+        }
+      });
+    }
+
+    const maxRound = Math.max(...data.map((row: Record<string, any>) => row.round || 0));
+
+    // Pre-process the data so we can use the table number for sorting
+    const enrichedData = data.map((row: Record<string, any>) => {
+      const gameId = row.playerGameId || "";
+      
+      let tableNum: string | number = "";
+      let timeExt = "";
+      if (row.round === maxRound) {
+        tableNum = playerToTableMap[gameId] ?? "";
+        timeExt = tableNum ? (timeExtensions[tableNum] || "") : "";
+      }
+      return { ...row, gameId, tableNum, timeExt };
+    });
+
+    // Sort highest round first, then highest table number first (with empty tables at the bottom)
+    enrichedData.sort((a, b) => {
+      const roundA = a.round || 0;
+      const roundB = b.round || 0;
+      if (roundA !== roundB) return roundB - roundA; // Highest round first
+
+      const tableA = a.tableNum === "" ? -Infinity : Number(a.tableNum);
+      const tableB = b.tableNum === "" ? -Infinity : Number(b.tableNum);
+      return tableB - tableA; // Highest table number first
+    });
+
+    const headers = ["Player", "ID", "Table", "Round", "Infraction", "Category", "Penalty", "Time Extension", "Description", "Judge"];
+    const csvRows = enrichedData.map((row) => {
       const category = row.type ? row.type.split(" - ")[0].trim() : "";
       const formattedRound = row.round ? `R${row.round}` : "";
       const mappedRow = [
-        row.playerName || "", row.playerGameId || "", formattedRound, row.type || "", category, row.sanction || "", row.description || "", row.creator_name || ""
+        row.playerName || "", row.gameId, row.tableNum, formattedRound, row.type || "", category, row.sanction || "", row.timeExt, row.description || "", row.creator_name || ""
       ];
       return mappedRow.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",");
     });
